@@ -1,0 +1,41 @@
+
+{
+  "compilerOptions": {
+    // JavaScript moderne
+    "target": "ESNext",
+    "lib": ["ESNext"],
+
+    // Modules Node.js (ESM)
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+
+    // Organisation du backend
+    "rootDir": "./src",
+    "outDir": "./dist",
+
+    // Types Node.js
+    "types": ["node"],
+
+    // Vérifications strictes
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+
+    // Gestion des modules
+    "esModuleInterop": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "noUncheckedSideEffectImports": true,
+    "moduleDetection": "force",
+
+    // Compilation
+    "sourceMap": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

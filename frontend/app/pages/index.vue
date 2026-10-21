@@ -1,8 +1,13 @@
 
 <script setup lang="ts">
+import { LogOut } from 'lucide-vue-next'
 useHead({
   title: 'Spot - Workout Tracker',
 })
+definePageMeta({
+  middleware: 'auth',
+})
+const { user, logout } = useAuth()
 </script>
 
 <template>
@@ -22,5 +27,13 @@ useHead({
         Démarrer une séance
       </button>
     </div>
+    <button
+      type="button"
+      @click="logout"
+      class="flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-400 transition hover:bg-red-500/20"
+    >
+      <LogOut :size="18" />
+      Se déconnecter
+    </button>
   </main>
 </template>

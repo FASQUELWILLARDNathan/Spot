@@ -3,6 +3,18 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineNuxtConfig({
   compatibilityDate: '2026-10-21',
 
+  runtimeConfig: {
+    public: {
+      apiBase: "/api",
+    },
+  },
+
+  routeRules: {
+    "/api/**": {
+      proxy: "http://127.0.0.1:4000/api/**",
+    },
+  },
+
   modules: [
     '@vite-pwa/nuxt'
   ],

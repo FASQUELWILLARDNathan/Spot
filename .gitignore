@@ -1,0 +1,18 @@
+.env
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Build
+dist/
+.nuxt/
+.output/
+.cache/
+
+# Generated files
+backend/src/generated/
