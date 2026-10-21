@@ -7,6 +7,18 @@ import {
   updateWorkoutSchema,
   type CreateWorkoutInput,
 } from "./workouts.schema.js";
+import { getPersonalRecords } from "../records/records.service.js";
+import { detectNewRecords } from "../records/records.detector.js";
+import {
+  expireWorkouts,
+  getWorkoutDeadline,
+  isWorkoutExpired,
+} from "./workouts-limits.js";
+import {
+  workoutCreationLimiter,
+  workoutModificationLimiter,
+  workoutDeletionLimiter,
+} from "./workouts-rate-limit.js";
 
 export const workoutsRouter = Router();
 
@@ -64,7 +76,10 @@ async function validateExercises(
 }
 
 // Créer une séance
-workoutsRouter.post("/", async (req, res, next) => {
+workoutsRouter.post(
+  "/",
+  workoutCreationLimiter,
+  async (req, res, next) => {
   try {
     const parsed = createWorkoutSchema.safeParse(req.body);
 
@@ -77,6 +92,24 @@ workoutsRouter.post("/", async (req, res, next) => {
     }
 
     const userId = res.locals.user.id as string;
+
+    await expireWorkouts(userId);
+
+    const activeWorkout = await prisma.workout.findFirst({
+    where: {
+        userId,
+        endedAt: null,
+    },
+    select: { id: true },
+    });
+
+    if (activeWorkout) {
+    res.status(409).json({
+        error: "Tu as déjà une séance en cours.",
+        workoutId: activeWorkout.id,
+    });
+    return;
+    }
 
     if (!await validateExercises(userId, parsed.data.exercises)) {
       res.status(400).json({
@@ -104,6 +137,7 @@ workoutsRouter.post("/", async (req, res, next) => {
 workoutsRouter.get("/", async (_req, res, next) => {
   try {
     const userId = res.locals.user.id as string;
+    await expireWorkouts(userId);
 
     const workouts = await prisma.workout.findMany({
       where: { userId },
@@ -122,6 +156,7 @@ workoutsRouter.get("/", async (_req, res, next) => {
 workoutsRouter.get("/:id", async (req, res, next) => {
   try {
     const userId = res.locals.user.id as string;
+    await expireWorkouts(userId);
     const id = req.params.id;
 
     if (typeof id !== "string") {
@@ -146,7 +181,10 @@ workoutsRouter.get("/:id", async (req, res, next) => {
 });
 
 // Modifier une séance
-workoutsRouter.patch("/:id", async (req, res, next) => {
+workoutsRouter.patch(
+  "/:id",
+  workoutModificationLimiter,
+  async (req, res, next) => {
   try {
     const parsed = updateWorkoutSchema.safeParse(req.body);
 
@@ -173,6 +211,9 @@ workoutsRouter.patch("/:id", async (req, res, next) => {
       return;
     }
 
+    // État des records avant la sauvegarde.
+    const recordsBefore = await getPersonalRecords(userId);
+
     const result = await prisma.$transaction(async (tx) => {
       const existing = await tx.workout.findFirst({
         where: { id, userId },
@@ -181,6 +222,23 @@ workoutsRouter.patch("/:id", async (req, res, next) => {
       if (!existing) return null;
 
       if (existing.endedAt) return "FINISHED" as const;
+
+      
+        if (isWorkoutExpired(existing.startedAt)) {
+        await tx.workout.updateMany({
+            where: {
+            id,
+            userId,
+            endedAt: null,
+            },
+            data: {
+            endedAt: getWorkoutDeadline(existing.startedAt),
+            },
+        });
+
+        return "EXPIRED" as const;
+        }
+
 
       await tx.workoutExercise.deleteMany({
         where: { workoutId: id },
@@ -201,6 +259,13 @@ workoutsRouter.patch("/:id", async (req, res, next) => {
       return;
     }
 
+    if (result === "EXPIRED") {
+        res.status(409).json({
+            error: "Cette séance a atteint la durée maximale de 3 heures.",
+        });
+        return;
+    }
+
     if (result === "FINISHED") {
       res.status(409).json({
         error: "Cette séance est déjà terminée",
@@ -208,7 +273,18 @@ workoutsRouter.patch("/:id", async (req, res, next) => {
       return;
     }
 
-    res.json({ workout: result });
+    // État des records après la sauvegarde.
+    const recordsAfter = await getPersonalRecords(userId);
+
+    const newRecords = detectNewRecords(
+        recordsBefore,
+        recordsAfter,
+    );
+
+    res.json({
+    workout: result,
+    newRecords,
+    });
   } catch (error) {
     next(error);
   }
@@ -218,6 +294,7 @@ workoutsRouter.patch("/:id", async (req, res, next) => {
 workoutsRouter.post("/:id/finish", async (req, res, next) => {
   try {
     const userId = res.locals.user.id as string;
+    await expireWorkouts(userId);
     const id = req.params.id;
 
     if (typeof id !== "string") {
@@ -253,7 +330,10 @@ workoutsRouter.post("/:id/finish", async (req, res, next) => {
 });
 
 // Supprimer une séance
-workoutsRouter.delete("/:id", async (req, res, next) => {
+workoutsRouter.delete(
+  "/:id",
+  workoutDeletionLimiter,
+  async (req, res, next) => {
   try {
     const userId = res.locals.user.id as string;
     const id = req.params.id;

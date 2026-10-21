@@ -17,6 +17,8 @@ import {
   Pencil,
   X,
   LoaderCircle,
+  Trophy,
+  ChartNoAxesCombined,
 } from 'lucide-vue-next'
 
 definePageMeta({
@@ -319,6 +321,46 @@ onMounted(() => {
           <Plus :size="22" />
         </button>
       </header>
+
+      
+      <!-- Accès aux statistiques de musculation -->
+      <section class="grid grid-cols-2 gap-3">
+        <NuxtLink
+          to="/records"
+          class="flex flex-col gap-3 rounded-2xl border border-white/5 bg-[#19232F] p-5 transition hover:border-[#C9F36A]/40"
+        >
+          <Trophy :size="24" class="text-[#C9F36A]" />
+
+          <div>
+            <h2 class="font-bold text-white">
+              Mes records
+            </h2>
+            <p class="mt-1 text-xs text-slate-400">
+              Tous mes records personnels
+            </p>
+          </div>
+        </NuxtLink>
+
+        <NuxtLink
+          to="/progress"
+          class="flex flex-col gap-3 rounded-2xl border border-white/5 bg-[#19232F] p-5 transition hover:border-[#C9F36A]/40"
+        >
+          <ChartNoAxesCombined
+            :size="24"
+            class="text-[#C9F36A]"
+          />
+
+          <div>
+            <h2 class="font-bold text-white">
+              Ma progression
+            </h2>
+            <p class="mt-1 text-xs text-slate-400">
+              Mes performances par exercice
+            </p>
+          </div>
+        </NuxtLink>
+      </section>
+
 
       <p v-if="error" role="alert" class="text-sm text-red-400">
         {{ error }}

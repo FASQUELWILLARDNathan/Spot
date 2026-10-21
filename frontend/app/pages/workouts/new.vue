@@ -46,18 +46,10 @@ interface Exercise {
   createdById: string | null
 }
 
-interface WorkoutSet {
-  weightKg: number | string | null
-  reps: number | string | null
-  rpe: number | string | null
-  completed: boolean
-}
-
 interface SelectedExercise {
   exerciseId: string
   name: string
   muscleGroup: MuscleGroup
-  sets: WorkoutSet[]
 }
 
 interface ApiError {
@@ -84,12 +76,6 @@ interface PreviousWorkout {
       name: string
       muscleGroup: MuscleGroup
     }
-    sets: {
-      weightKg: number | string | null
-      reps: number | null
-      rpe: number | string | null
-      completed: boolean
-    }[]
   }[]
 }
 
@@ -161,28 +147,12 @@ const filteredCatalog = computed(() => {
   })
 })
 
-const totalSets = computed(() =>
-  selectedExercises.value.reduce(
-    (total, exercise) => total + exercise.sets.length,
-    0,
-  ),
-)
-
 function muscleLabel(group: MuscleGroup): string {
   return muscleGroups.find((item) => item.value === group)?.label ?? group
 }
 
 function equipmentLabel(equipment: Equipment): string {
   return equipments.find((item) => item.value === equipment)?.label ?? equipment
-}
-
-function emptySet(): WorkoutSet {
-  return {
-    weightKg: null,
-    reps: null,
-    rpe: null,
-    completed: false,
-  }
 }
 
 function normalizeNumber(
@@ -224,11 +194,17 @@ async function openPicker(): Promise<void> {
 }
 
 function addExercise(exercise: Exercise): void {
+  if (selectedExercises.value.some(
+    (item) => item.exerciseId === exercise.id,
+  )) {
+    catalogError.value = 'Cet exercice est déjà ajouté.'
+    return
+  }
+
   selectedExercises.value.push({
     exerciseId: exercise.id,
     name: exercise.name,
     muscleGroup: exercise.muscleGroup,
-    sets: [emptySet()],
   })
 
   showPicker.value = false
@@ -238,23 +214,6 @@ function addExercise(exercise: Exercise): void {
 
 function removeExercise(index: number): void {
   selectedExercises.value.splice(index, 1)
-}
-
-function addSet(exercise: SelectedExercise): void {
-  if (exercise.sets.length >= 30) return
-
-  const previous = exercise.sets.at(-1)
-
-  exercise.sets.push({
-    weightKg: previous?.weightKg ?? null,
-    reps: previous?.reps ?? null,
-    rpe: previous?.rpe ?? null,
-    completed: false,
-  })
-}
-
-function removeSet(exercise: SelectedExercise, index: number): void {
-  exercise.sets.splice(index, 1)
 }
 
 async function createCustomExercise(): Promise<void> {
@@ -357,22 +316,11 @@ async function reuseWorkout(workoutId: string): Promise<void> {
     const previous = response.workout
 
     const copiedExercises: SelectedExercise[] =
-      previous.exercises.map((item) => ({
-        exerciseId: item.exerciseId,
-        name: item.exercise.name,
-        muscleGroup: item.exercise.muscleGroup,
-
-        // On conserve les charges et les répétitions,
-        // mais aucune série ne doit être déjà validée.
-        sets: item.sets.length
-          ? item.sets.map((set) => ({
-              weightKg: normalizeNumber(set.weightKg),
-              reps: set.reps,
-              rpe: normalizeNumber(set.rpe),
-              completed: false,
-            }))
-          : [emptySet()],
-      }))
+        previous.exercises.map((item) => ({
+            exerciseId: item.exerciseId,
+            name: item.exercise.name,
+            muscleGroup: item.exercise.muscleGroup,
+        }))
 
     workoutName.value = previous.name
     selectedExercises.value = copiedExercises
@@ -387,6 +335,7 @@ async function reuseWorkout(workoutId: string): Promise<void> {
     loadingTemplateId.value = null
   }
 }
+
 
 
 async function createWorkout(): Promise<void> {
@@ -409,42 +358,33 @@ async function createWorkout(): Promise<void> {
     return
   }
 
-  const exercises = selectedExercises.value.map((exercise) => ({
-    exerciseId: exercise.exerciseId,
-    sets: exercise.sets.map((set) => ({
-      weightKg: normalizeNumber(set.weightKg),
-      reps: normalizeNumber(set.reps),
-      rpe: normalizeNumber(set.rpe),
-      completed: set.completed,
-    })),
-  }))
-
-  for (const exercise of exercises) {
-    for (const set of exercise.sets) {
-      if (
-        (set.weightKg !== null && (set.weightKg < 0 || set.weightKg > 2000)) ||
-        (set.reps !== null &&
-          (!Number.isInteger(set.reps) || set.reps < 0 || set.reps > 1000)) ||
-        (set.rpe !== null && (set.rpe < 1 || set.rpe > 10))
-      ) {
-        error.value = 'Vérifie les poids, répétitions et RPE saisis.'
-        return
-      }
-    }
-  }
-
   creatingWorkout.value = true
   error.value = ''
 
   try {
-    const response = await $fetch<{ workout: { id: string } }>(
-      '/api/workouts',
-      {
-        method: 'POST',
-        credentials: 'include',
-        body: { name, exercises },
+    const response = await $fetch<{
+      workout: { id: string }
+    }>('/api/workouts', {
+      method: 'POST',
+      credentials: 'include',
+      body: {
+        name,
+        exercises: selectedExercises.value.map((exercise) => ({
+          exerciseId: exercise.exerciseId,
+
+          // Une série vide initiale pour rester compatible
+          // avec notre backend et la page de suivi existants.
+          sets: [
+            {
+              weightKg: null,
+              reps: null,
+              rpe: null,
+              completed: false,
+            },
+          ],
+        })),
       },
-    )
+    })
 
     await router.push(`/workouts/${response.workout.id}`)
   } catch (err) {
@@ -452,7 +392,7 @@ async function createWorkout(): Promise<void> {
 
     error.value =
       apiError.data?.error ??
-      "Impossible de créer la séance."
+      'Impossible de créer la séance.'
   } finally {
     creatingWorkout.value = false
   }
@@ -617,7 +557,7 @@ onMounted(() => {
         </h2>
 
         <span class="text-xs text-slate-400">
-          {{ selectedExercises.length }} exercices · {{ totalSets }} séries
+          {{ selectedExercises.length }} exercices
         </span>
       </div>
 
@@ -639,126 +579,40 @@ onMounted(() => {
         </p>
       </div>
 
-      <div class="space-y-4">
-        <article
-          v-for="(exercise, exerciseIndex) in selectedExercises"
-          :key="exerciseIndex"
-          class="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]"
+      
+    <div class="space-y-3">
+    <article
+        v-for="(exercise, exerciseIndex) in selectedExercises"
+        :key="exercise.exerciseId"
+        class="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4"
+    >
+        <div class="flex min-w-0 items-center gap-3">
+        <div class="rounded-xl bg-lime-300/10 p-3 text-lime-300">
+            <Dumbbell :size="19" />
+        </div>
+
+        <div class="min-w-0">
+            <h3 class="truncate font-semibold text-white">
+            {{ exercise.name }}
+            </h3>
+
+            <p class="mt-1 text-xs text-slate-400">
+            {{ muscleLabel(exercise.muscleGroup) }}
+            </p>
+        </div>
+        </div>
+
+        <button
+        type="button"
+        class="rounded-lg p-2 text-slate-500 hover:bg-red-500/10 hover:text-red-300"
+        aria-label="Supprimer l'exercice"
+        @click="removeExercise(exerciseIndex)"
         >
-          <div class="flex items-center justify-between gap-3 border-b border-white/10 p-4">
-            <div class="flex min-w-0 items-center gap-3">
-              <div class="rounded-xl bg-lime-300/10 p-2.5 text-lime-300">
-                <Dumbbell :size="19" />
-              </div>
+        <Trash2 :size="18" />
+        </button>
+    </article>
+    </div>
 
-              <div class="min-w-0">
-                <h3 class="truncate font-semibold text-white">
-                  {{ exercise.name }}
-                </h3>
-
-                <p class="mt-1 text-xs text-slate-400">
-                  {{ muscleLabel(exercise.muscleGroup) }}
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              class="rounded-lg p-2 text-slate-500 hover:bg-red-500/10 hover:text-red-300"
-              aria-label="Supprimer l'exercice"
-              @click="removeExercise(exerciseIndex)"
-            >
-              <Trash2 :size="18" />
-            </button>
-          </div>
-
-          <div class="p-4">
-            <div class="mb-3 grid grid-cols-[32px_1fr_1fr_1fr_36px] gap-2 text-center text-[11px] font-semibold uppercase text-slate-500">
-              <span>N°</span>
-              <span>Kg</span>
-              <span>Reps</span>
-              <span>RPE</span>
-              <span>OK</span>
-            </div>
-
-            <div
-              v-for="(set, setIndex) in exercise.sets"
-              :key="setIndex"
-              class="mb-2 grid grid-cols-[32px_1fr_1fr_1fr_36px] items-center gap-2"
-            >
-              <span class="text-center text-sm font-semibold text-slate-400">
-                {{ setIndex + 1 }}
-              </span>
-
-              <input
-                v-model.number="set.weightKg"
-                type="number"
-                min="0"
-                max="2000"
-                step="0.5"
-                placeholder="—"
-                class="min-w-0 rounded-lg border border-white/10 bg-[#141D29] px-2 py-3 text-center text-sm text-white outline-none focus:border-lime-300"
-              />
-
-              <input
-                v-model.number="set.reps"
-                type="number"
-                min="0"
-                max="1000"
-                step="1"
-                placeholder="—"
-                class="min-w-0 rounded-lg border border-white/10 bg-[#141D29] px-2 py-3 text-center text-sm text-white outline-none focus:border-lime-300"
-              />
-
-              <input
-                v-model.number="set.rpe"
-                type="number"
-                min="1"
-                max="10"
-                step="0.5"
-                placeholder="—"
-                class="min-w-0 rounded-lg border border-white/10 bg-[#141D29] px-2 py-3 text-center text-sm text-white outline-none focus:border-lime-300"
-              />
-
-              <button
-                type="button"
-                class="flex h-10 w-9 items-center justify-center rounded-lg border transition"
-                :class="
-                  set.completed
-                    ? 'border-lime-300 bg-lime-300 text-slate-950'
-                    : 'border-white/10 bg-[#141D29] text-slate-500'
-                "
-                :aria-label="`Valider la série ${setIndex + 1}`"
-                @click="set.completed = !set.completed"
-              >
-                <Check v-if="set.completed" :size="18" />
-              </button>
-            </div>
-
-            <div class="mt-3 flex items-center gap-2">
-              <button
-                type="button"
-                :disabled="exercise.sets.length >= 30"
-                class="flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 py-3 text-sm font-semibold text-slate-300 hover:bg-white/5 disabled:opacity-50"
-                @click="addSet(exercise)"
-              >
-                <Plus :size="16" />
-                Ajouter une série
-              </button>
-
-              <button
-                v-if="exercise.sets.length"
-                type="button"
-                class="rounded-xl border border-white/10 p-3 text-slate-400 hover:text-red-300"
-                aria-label="Supprimer la dernière série"
-                @click="removeSet(exercise, exercise.sets.length - 1)"
-              >
-                <Trash2 :size="17" />
-              </button>
-            </div>
-          </div>
-        </article>
-      </div>
 
       <button
         type="button"
@@ -794,7 +648,7 @@ onMounted(() => {
     </button>
 
     <p class="mt-3 text-center text-xs text-slate-500">
-      Ta séance sera enregistrée et tu pourras la reprendre plus tard.
+        Tu pourras renseigner tes poids et répétitions pendant l'entraînement.
     </p>
 
     <!-- Sélecteur d'exercices -->

@@ -16,6 +16,7 @@ import {
   AlarmClock,
   Play,
   SkipForward,
+  Trophy,
 } from 'lucide-vue-next'
 
 definePageMeta({
@@ -71,6 +72,19 @@ interface EditableExercise {
   sets: EditableSet[]
 }
 
+interface NewPersonalRecord {
+  exerciseId: string
+  exerciseName: string
+  type: 'MAX_WEIGHT' | 'MAX_VOLUME' | 'ESTIMATED_1RM'
+  previousValue: number | null
+  newValue: number
+}
+
+interface WorkoutSaveResponse {
+  workout: Workout
+  newRecords: NewPersonalRecord[]
+}
+
 type SaveStatus = 'saved' | 'pending' | 'saving' | 'error'
 type RestDuration = 60 | 90 | 120 | 180
 
@@ -89,6 +103,7 @@ const finishing = ref(false)
 const deleting = ref(false)
 const error = ref('')
 const success = ref('')
+const newRecords = ref<NewPersonalRecord[]>([])
 
 const showExercisePicker = ref(false)
 const search = ref('')
@@ -138,6 +153,9 @@ const restStorageKey = computed(
 
 const restDurationStorageKey = 'spot:rest-duration'
 
+
+const MAX_WORKOUT_SECONDS = 3 * 60 * 60
+
 const workoutElapsedSeconds = computed(() => {
   if (!workout.value?.startedAt) return 0
 
@@ -149,8 +167,20 @@ const workoutElapsedSeconds = computed(() => {
     ? new Date(workout.value.endedAt).getTime()
     : now.value
 
-  return Math.max(0, Math.floor((end - start) / 1000))
+  const elapsed = Math.max(0, Math.floor((end - start) / 1000))
+
+  return Math.min(elapsed, MAX_WORKOUT_SECONDS)
 })
+
+const workoutTimeExpired = computed(() => {
+  if (!workout.value || isFinished.value) return false
+
+  const start = new Date(workout.value.startedAt).getTime()
+
+  return Number.isFinite(start)
+    && now.value - start >= MAX_WORKOUT_SECONDS * 1000
+})
+
 
 const workoutElapsedLabel = computed(() =>
   formatDuration(workoutElapsedSeconds.value),
@@ -194,6 +224,23 @@ function formatDate(value: string): string {
     dateStyle: 'long',
     timeStyle: 'short',
   }).format(new Date(value))
+}
+
+function recordLabel(type: NewPersonalRecord['type']): string {
+  switch (type) {
+    case 'MAX_WEIGHT':
+      return 'Record de charge'
+    case 'MAX_VOLUME':
+      return 'Record de volume'
+    case 'ESTIMATED_1RM':
+      return 'Record de 1RM estimé'
+  }
+}
+
+function formatRecordValue(record: NewPersonalRecord): string {
+  return `${new Intl.NumberFormat('fr-FR', {
+    maximumFractionDigits: 2,
+  }).format(record.newValue)} kg`
 }
 
 function hydrateWorkout(data: Workout): void {
@@ -405,6 +452,44 @@ function addSet(exercise: EditableExercise): void {
   })
 }
 
+
+function reusePreviousPerformance(
+  exercise: EditableExercise,
+  previousSets: {
+    weightKg: number | null
+    reps: number | null
+    rpe: number | null
+  }[],
+): void {
+  if (isFinished.value || previousSets.length === 0) return
+
+  const hasExistingData = exercise.sets.some(
+    (set) =>
+      set.completed ||
+      (set.weightKg !== null && set.weightKg !== '') ||
+      (set.reps !== null && set.reps !== '') ||
+      (set.rpe !== null && set.rpe !== ''),
+  )
+
+  if (
+    hasExistingData &&
+    !window.confirm(
+      'Remplacer les séries actuelles par celles de la dernière séance ?',
+    )
+  ) {
+    return
+  }
+
+  exercise.sets = previousSets.map((set) => ({
+    weightKg: set.weightKg,
+    reps: set.reps,
+    rpe: set.rpe,
+    completed: false,
+  }))
+
+  success.value = 'Performances précédentes reprises.'
+}
+
 function removeSet(exercise: EditableExercise, index: number): void {
   exercise.sets.splice(index, 1)
 }
@@ -475,11 +560,18 @@ async function autoSave(): Promise<void> {
     saveStatus.value = 'saving'
 
     try {
-      await $fetch(`/api/workouts/${workoutId.value}`, {
-        method: 'PATCH',
-        credentials: 'include',
-        body: payload,
-      })
+      const response = await $fetch<WorkoutSaveResponse>(
+        `/api/workouts/${workoutId.value}`,
+        {
+            method: 'PATCH',
+            credentials: 'include',
+            body: payload,
+        },
+        )
+
+        if (response.newRecords.length > 0) {
+        newRecords.value = response.newRecords
+      }
 
       savedVersion = version
       lastSavedAt.value = new Date()
@@ -871,6 +963,85 @@ onMounted(loadWorkout)
         {{ success }}
       </div>
 
+      
+        <!-- Nouveaux records personnels -->
+        <section
+        v-if="newRecords.length > 0"
+        class="mb-6 overflow-hidden rounded-2xl border border-lime-300/30 bg-lime-300/10 p-5"
+        aria-live="polite"
+        >
+        <div class="flex items-start justify-between gap-3">
+            <div class="flex items-center gap-3">
+            <div class="rounded-xl bg-lime-300/20 p-3 text-lime-300">
+                <Trophy :size="24" />
+            </div>
+
+            <div>
+                <h2 class="text-lg font-bold text-lime-300">
+                Nouveau PR !
+                </h2>
+
+                <p class="mt-1 text-xs text-slate-300">
+                Tu viens de battre un record personnel.
+                </p>
+            </div>
+            </div>
+
+            <button
+            type="button"
+            class="rounded-lg p-2 text-slate-400 hover:text-white"
+            aria-label="Fermer la notification"
+            @click="newRecords = []"
+            >
+            <X :size="18" />
+            </button>
+        </div>
+
+        <div class="mt-4 space-y-2">
+            <div
+            v-for="record in newRecords"
+            :key="`${record.exerciseId}-${record.type}`"
+            class="rounded-xl border border-white/10 bg-[#141D29] p-3"
+            >
+            <p class="text-sm font-semibold text-white">
+                {{ record.exerciseName }}
+            </p>
+
+            <p class="mt-1 text-xs text-slate-400">
+                {{ recordLabel(record.type) }}
+            </p>
+
+            <div class="mt-2 flex items-center gap-2">
+                <span
+                v-if="record.previousValue !== null"
+                class="text-sm text-slate-500 line-through"
+                >
+                {{ record.previousValue }} kg
+                </span>
+
+                <span
+                v-else
+                class="text-xs text-slate-400"
+                >
+                Premier record
+                </span>
+
+                <span class="font-bold text-lime-300">
+                {{ formatRecordValue(record) }}
+                </span>
+            </div>
+            </div>
+        </div>
+
+        <NuxtLink
+            to="/records"
+            class="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-lime-300 hover:underline"
+        >
+            <Trophy :size="16" />
+            Voir tous mes records
+        </NuxtLink>
+        </section>
+
       <section class="space-y-4">
         <article
           v-for="(exercise, exerciseIndex) in exercises"
@@ -899,7 +1070,14 @@ onMounted(loadWorkout)
             </button>
           </div>
 
-          <div class="p-4">
+          <div class="p-4">c
+            <PreviousPerformance
+                :workout-id="workoutId"
+                :exercise-id="exercise.exerciseId"
+                :disabled="isFinished"
+                @reuse="(sets) => reusePreviousPerformance(exercise, sets)"
+            />
+
             <div class="mb-3 grid grid-cols-[32px_1fr_1fr_1fr_36px] gap-2 text-center text-[11px] font-semibold uppercase text-slate-500">
               <span>N°</span>
               <span>Kg</span>

@@ -18,8 +18,19 @@ const tabs = [
   { label: 'Profil', to: '/profile', icon: UserRound },
 ]
 
-function isActive(path: string) {
+function isActive(path: string): boolean {
   if (path === '/') return route.path === '/'
+
+  if (path === '/stats') {
+    return (
+      route.path === '/stats' ||
+      route.path.startsWith('/stats/') ||
+      route.path === '/records' ||
+      route.path.startsWith('/records/') ||
+      route.path === '/progress' ||
+      route.path.startsWith('/progress/')
+    )
+  }
 
   return route.path === path ||
     route.path.startsWith(`${path}/`)

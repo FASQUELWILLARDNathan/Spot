@@ -7,6 +7,10 @@ import { profileRouter } from "./modules/profile/profile.routes.js";
 import { weighInsRouter } from "./modules/weigh-ins/weigh-ins.routes.js";
 import { exercisesRouter } from "./modules/exercises/exercises.routes.js";
 import { workoutsRouter } from "./modules/workouts/workouts.routes.js";
+import { recordsRouter } from "./modules/records/records.routes.js";
+import { progressRouter } from "./modules/progress/progress.routes.js";
+import { performancesRouter } from './modules/performances/performances.routes.js'
+import { apiRateLimiter } from "./middlewares/api-rate-limit.js";
 
 export const app = express();
 
@@ -24,23 +28,26 @@ app.use(
   })
 );
 
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "100kb" }));
 app.use(cookieParser());
 
 // Protection des requêtes qui modifient des données.
 // Pour le développement local, on autorise le frontend Nuxt.
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) {
     return next();
   }
 
-  const origin = req.headers.origin;
+  const allowedOrigins = new Set([
+    "http://localhost:3000",
+  ]);
 
-  if (origin && origin !== "http://localhost:3000") {
-    return res.status(403).json({
-      error: "Origine non autorisée",
-    });
-  }
+  app.use(
+    cors({
+      origin: [...allowedOrigins],
+      credentials: true,
+    }),
+  );
 
   next();
 });
@@ -52,11 +59,15 @@ app.get("/health", (_req, res) => {
   });
 });
 
+app.use("/api", apiRateLimiter);
 app.use("/api/auth", authRoutes);
 app.use("/api/profile", profileRouter);
 app.use("/api/weigh-ins", weighInsRouter);
 app.use("/api/exercises", exercisesRouter);
 app.use("/api/workouts", workoutsRouter);
+app.use("/api/records", recordsRouter);
+app.use("/api/progress", progressRouter);
+app.use('/api/performances', performancesRouter)
 
 // Gestion centralisée des erreurs
 app.use((
