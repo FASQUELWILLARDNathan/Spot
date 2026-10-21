@@ -26,6 +26,9 @@ model User {
 
   weighIns WeighIn[]
 
+  workouts        Workout[]
+  customExercises Exercise[]
+
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -72,6 +75,97 @@ model WeighIn {
 
   @@index([userId, measuredAt])
 }
+
+
+model Exercise {
+  id          String   @id @default(uuid())
+  name        String
+  muscleGroup MuscleGroup
+  equipment   Equipment
+  createdById String?
+  createdBy   User?     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  workoutExercises WorkoutExercise[]
+
+  createdAt DateTime @default(now())
+
+  @@index([muscleGroup])
+  @@index([createdById])
+}
+
+model Workout {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name      String
+  startedAt DateTime @default(now())
+  endedAt   DateTime?
+
+  exercises WorkoutExercise[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, startedAt])
+}
+
+model WorkoutExercise {
+  id         String @id @default(uuid())
+  workoutId  String
+  exerciseId String
+
+  workout  Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+
+  position Int
+
+  sets WorkoutSet[]
+
+  @@index([workoutId, position])
+}
+
+model WorkoutSet {
+  id                String @id @default(uuid())
+  workoutExerciseId String
+
+  workoutExercise WorkoutExercise @relation(fields: [workoutExerciseId], references: [id], onDelete: Cascade)
+
+  position Int
+  weightKg Decimal? @db.Decimal(7, 2)
+  reps     Int?
+  rpe      Decimal? @db.Decimal(3, 1)
+  completed Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([workoutExerciseId, position])
+}
+
+enum MuscleGroup {
+  CHEST
+  BACK
+  SHOULDERS
+  BICEPS
+  TRICEPS
+  QUADS
+  HAMSTRINGS
+  GLUTES
+  CALVES
+  ABS
+  FULL_BODY
+}
+
+enum Equipment {
+  BARBELL
+  DUMBBELL
+  MACHINE
+  CABLE
+  BODYWEIGHT
+  KETTLEBELL
+  OTHER
+}
+
 
 enum FitnessGoal {
   GAIN_MUSCLE

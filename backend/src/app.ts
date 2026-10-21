@@ -5,6 +5,8 @@ import cookieParser from "cookie-parser";
 import { authRoutes } from "./modules/auth/auth.routes.js";
 import { profileRouter } from "./modules/profile/profile.routes.js";
 import { weighInsRouter } from "./modules/weigh-ins/weigh-ins.routes.js";
+import { exercisesRouter } from "./modules/exercises/exercises.routes.js";
+import { workoutsRouter } from "./modules/workouts/workouts.routes.js";
 
 export const app = express();
 
@@ -53,6 +55,8 @@ app.get("/health", (_req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/profile", profileRouter);
 app.use("/api/weigh-ins", weighInsRouter);
+app.use("/api/exercises", exercisesRouter);
+app.use("/api/workouts", workoutsRouter);
 
 // Gestion centralisée des erreurs
 app.use((
