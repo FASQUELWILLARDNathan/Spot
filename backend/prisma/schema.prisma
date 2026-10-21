@@ -24,6 +24,8 @@ model User {
   profile      UserProfile?
   sessions     Session[]
 
+  weighIns WeighIn[]
+
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -52,6 +54,23 @@ model Session {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+model WeighIn {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  weightKg     Decimal  @db.Decimal(6, 2)
+  bodyFatPct   Decimal? @db.Decimal(5, 2)
+  muscleMassKg Decimal? @db.Decimal(6, 2)
+  bodyWaterPct Decimal? @db.Decimal(5, 2)
+
+  measuredAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId, measuredAt])
 }
 
 enum FitnessGoal {

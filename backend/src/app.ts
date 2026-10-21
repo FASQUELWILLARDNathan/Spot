@@ -4,6 +4,7 @@ import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import { authRoutes } from "./modules/auth/auth.routes.js";
 import { profileRouter } from "./modules/profile/profile.routes.js";
+import { weighInsRouter } from "./modules/weigh-ins/weigh-ins.routes.js";
 
 export const app = express();
 
@@ -51,6 +52,7 @@ app.get("/health", (_req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/profile", profileRouter);
+app.use("/api/weigh-ins", weighInsRouter);
 
 // Gestion centralisée des erreurs
 app.use((
