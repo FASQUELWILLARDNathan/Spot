@@ -50,6 +50,8 @@ model UserProfile {
   startingWeightKg Decimal?     @db.Decimal(6, 2)
   goal             FitnessGoal?
 
+  bio String? @db.VarChar(160)
+
   shareBodyStatsWithGroups Boolean @default(false)
 
   createdAt DateTime @default(now())
