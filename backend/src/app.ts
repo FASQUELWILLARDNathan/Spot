@@ -11,6 +11,11 @@ import { recordsRouter } from "./modules/records/records.routes.js";
 import { progressRouter } from "./modules/progress/progress.routes.js";
 import { performancesRouter } from './modules/performances/performances.routes.js'
 import { apiRateLimiter } from "./middlewares/api-rate-limit.js";
+import { friendsRouter } from "./modules/friends/friends.routes.js";
+import { groupsRouter } from "./modules/groups/groups.routes.js";
+import { groupStatsRouter } from "./modules/groups/groups.stats.routes.js";
+import { privacyRouter } from "./modules/profile/privacy.routes.js";
+import { groupLeaderboardRouter } from "./modules/groups/groups.leaderboard.routes.js";
 
 export const app = express();
 
@@ -68,6 +73,11 @@ app.use("/api/workouts", workoutsRouter);
 app.use("/api/records", recordsRouter);
 app.use("/api/progress", progressRouter);
 app.use('/api/performances', performancesRouter)
+app.use("/api/friends", friendsRouter);
+app.use("/api/groups", groupsRouter);
+app.use("/api/groups", groupStatsRouter);
+app.use("/api/profile/privacy", privacyRouter);
+app.use("/api/groups", groupLeaderboardRouter);
 
 // Gestion centralisée des erreurs
 app.use((

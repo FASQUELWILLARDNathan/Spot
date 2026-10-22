@@ -14,7 +14,7 @@ const tabs = [
   { label: 'Accueil', to: '/', icon: House },
   { label: 'Séances', to: '/workouts', icon: Dumbbell },
   { label: 'Stats', to: '/stats', icon: ChartNoAxesColumn },
-  { label: 'Amis', to: '/friends', icon: Users },
+  { label: 'Social', to: '/friends', icon: Users },
   { label: 'Profil', to: '/profile', icon: UserRound },
 ]
 

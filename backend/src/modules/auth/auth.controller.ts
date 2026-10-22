@@ -42,17 +42,35 @@ export async function registerController(req: Request, res: Response) {
 
     return res.status(201).json({ user });
   } catch (error) {
-    if (
+      if (
         error instanceof PrismaClientKnownRequestError &&
         error.code === "P2002"
-        ) {
-        return res.status(409).json({
-            error: "Adresse e-mail ou pseudo déjà utilisé",
-        });
-    }
+      ) {
+        const target = error.meta?.target;
 
-    throw error;
-  }
+        const fields = Array.isArray(target)
+          ? target.map(String)
+          : [];
+
+        if (fields.includes("email")) {
+          return res.status(409).json({
+            error: "Cette adresse e-mail est déjà utilisée.",
+          });
+        }
+
+        if (fields.includes("username")) {
+          return res.status(409).json({
+            error: "Ce pseudo est déjà utilisé.",
+          });
+        }
+
+        return res.status(409).json({
+          error: "Un compte avec ces informations existe déjà.",
+        });
+      }
+
+      throw error;
+    }
 }
 
 export async function loginController(req: Request, res: Response) {

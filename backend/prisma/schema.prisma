@@ -14,76 +14,85 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  username     String   @unique
+  id           String @id @default(uuid())
+  email        String @unique
+  username     String @unique
   passwordHash String
   firstName    String
   lastName     String
 
-  profile      UserProfile?
-  sessions     Session[]
+  profile  UserProfile?
+  sessions Session[]
 
   weighIns WeighIn[]
 
   workouts        Workout[]
   customExercises Exercise[]
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  friendshipsSent     Friendship[] @relation("FriendshipSender")
+  friendshipsReceived Friendship[] @relation("FriendshipReceiver")
+
+  ownedGroups              Group[]           @relation("GroupOwner")
+  groupMemberships         GroupMember[]
+  groupInvitationsSent     GroupInvitation[] @relation("GroupInvitationSender")
+  groupInvitationsReceived GroupInvitation[] @relation("GroupInvitationReceiver")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model UserProfile {
-  id           String   @id @default(uuid())
-  userId       String   @unique
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  heightCm     Int?
-  startingWeightKg Decimal? @db.Decimal(6, 2)
-  goal         FitnessGoal?
+  heightCm         Int?
+  startingWeightKg Decimal?     @db.Decimal(6, 2)
+  goal             FitnessGoal?
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  shareBodyStatsWithGroups Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Session {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  tokenHash   String   @unique
-  expiresAt   DateTime
-  createdAt   DateTime @default(now())
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 
   @@index([userId])
   @@index([expiresAt])
 }
 
 model WeighIn {
-  id           String   @id @default(uuid())
-  userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   weightKg     Decimal  @db.Decimal(6, 2)
   bodyFatPct   Decimal? @db.Decimal(5, 2)
   muscleMassKg Decimal? @db.Decimal(6, 2)
   bodyWaterPct Decimal? @db.Decimal(5, 2)
 
-  measuredAt   DateTime @default(now())
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  measuredAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@index([userId, measuredAt])
 }
 
-
 model Exercise {
-  id          String   @id @default(uuid())
+  id          String      @id @default(uuid())
   name        String
   muscleGroup MuscleGroup
   equipment   Equipment
   createdById String?
-  createdBy   User?     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdBy   User?       @relation(fields: [createdById], references: [id], onDelete: Cascade)
 
   workoutExercises WorkoutExercise[]
 
@@ -94,12 +103,12 @@ model Exercise {
 }
 
 model Workout {
-  id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   name      String
-  startedAt DateTime @default(now())
+  startedAt DateTime  @default(now())
   endedAt   DateTime?
 
   exercises WorkoutExercise[]
@@ -131,15 +140,81 @@ model WorkoutSet {
 
   workoutExercise WorkoutExercise @relation(fields: [workoutExerciseId], references: [id], onDelete: Cascade)
 
-  position Int
-  weightKg Decimal? @db.Decimal(7, 2)
-  reps     Int?
-  rpe      Decimal? @db.Decimal(3, 1)
-  completed Boolean @default(false)
+  position  Int
+  weightKg  Decimal? @db.Decimal(7, 2)
+  reps      Int?
+  rpe       Decimal? @db.Decimal(3, 1)
+  completed Boolean  @default(false)
 
   createdAt DateTime @default(now())
 
   @@index([workoutExerciseId, position])
+}
+
+model Friendship {
+  id         String           @id @default(uuid())
+  senderId   String
+  receiverId String
+  status     FriendshipStatus @default(PENDING)
+
+  sender   User @relation("FriendshipSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("FriendshipReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([senderId, receiverId])
+  @@index([receiverId, status])
+  @@index([senderId, status])
+}
+
+model Group {
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+  ownerId     String
+
+  owner       User              @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members     GroupMember[]
+  invitations GroupInvitation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
+}
+
+model GroupMember {
+  id      String    @id @default(uuid())
+  groupId String
+  userId  String
+  role    GroupRole @default(MEMBER)
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  joinedAt DateTime @default(now())
+
+  @@unique([groupId, userId])
+  @@index([userId])
+}
+
+model GroupInvitation {
+  id         String                @id @default(uuid())
+  groupId    String
+  senderId   String
+  receiverId String
+  status     GroupInvitationStatus @default(PENDING)
+
+  group    Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  sender   User  @relation("GroupInvitationSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User  @relation("GroupInvitationReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([groupId, receiverId])
+  @@index([receiverId, status])
 }
 
 enum MuscleGroup {
@@ -166,9 +241,24 @@ enum Equipment {
   OTHER
 }
 
-
 enum FitnessGoal {
   GAIN_MUSCLE
   LOSE_WEIGHT
   MAINTAIN
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+}
+
+enum GroupRole {
+  OWNER
+  MEMBER
+}
+
+enum GroupInvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
 }
