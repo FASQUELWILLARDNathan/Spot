@@ -16,6 +16,7 @@ const createExerciseSchema = z.object({
 }).strict();
 
 // Catalogue + exercices personnels
+// Liste des exercices disponibles
 exercisesRouter.get("/", async (req, res, next) => {
   try {
     const userId = res.locals.user.id as string;
@@ -26,28 +27,65 @@ exercisesRouter.get("/", async (req, res, next) => {
 
     const exercises = await prisma.exercise.findMany({
       where: {
-        AND: [
-          {
-            OR: [
-              { createdById: null },
-              { createdById: userId },
-            ],
-          },
-          ...(search
-            ? [{
-                name: {
-                  contains: search,
-                  mode: "insensitive" as const,
-                },
-              }]
-            : []),
+        OR: [
+          { createdById: null },
+          { createdById: userId },
         ],
+        ...(search
+          ? {
+              name: {
+                contains: search,
+                mode: "insensitive" as const,
+              },
+            }
+          : {}),
       },
       orderBy: { name: "asc" },
       take: 100,
+      select: {
+        id: true,
+        name: true,
+        muscleGroup: true,
+        equipment: true,
+        targetMuscle: true,
+        imageUrl: true,
+        animationUrl: true,
+      },
     });
 
     res.json({ exercises });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Fiche détaillée
+exercisesRouter.get("/:id", async (req, res, next) => {
+  try {
+    const userId = res.locals.user.id as string;
+    const id = req.params.id;
+
+    if (typeof id !== "string") {
+      res.status(400).json({ error: "Identifiant invalide" });
+      return;
+    }
+
+    const exercise = await prisma.exercise.findFirst({
+      where: {
+        id,
+        OR: [
+          { createdById: null },
+          { createdById: userId },
+        ],
+      },
+    });
+
+    if (!exercise) {
+      res.status(404).json({ error: "Exercice introuvable" });
+      return;
+    }
+
+    res.json({ exercise });
   } catch (error) {
     next(error);
   }

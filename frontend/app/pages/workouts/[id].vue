@@ -1049,20 +1049,15 @@ onMounted(loadWorkout)
           class="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]"
         >
           <div class="flex items-center justify-between gap-3 border-b border-white/10 p-4">
-            <div class="flex min-w-0 items-center gap-3">
-              <div class="rounded-xl bg-lime-300/10 p-2.5 text-lime-300">
-                <Dumbbell :size="19" />
-              </div>
-
-              <h2 class="truncate font-semibold text-white">
-                {{ exercise.name }}
-              </h2>
-            </div>
+            <ExerciseHoldPreview
+              :exercise-id="exercise.exerciseId"
+              :name="exercise.name"
+            />
 
             <button
               v-if="!isFinished"
               type="button"
-              class="rounded-lg p-2 text-slate-500 hover:bg-red-500/10 hover:text-red-300"
+              class="shrink-0 rounded-lg p-2 text-slate-500 hover:bg-red-500/10 hover:text-red-300"
               aria-label="Supprimer l'exercice"
               @click="removeExercise(exerciseIndex)"
             >
@@ -1070,7 +1065,7 @@ onMounted(loadWorkout)
             </button>
           </div>
 
-          <div class="p-4">c
+          <div class="p-4">
             <PreviousPerformance
                 :workout-id="workoutId"
                 :exercise-id="exercise.exerciseId"

@@ -96,6 +96,14 @@ model Exercise {
   createdById String?
   createdBy   User?       @relation(fields: [createdById], references: [id], onDelete: Cascade)
 
+  externalId       String? @unique
+  descriptionFr    String? @db.Text
+  instructionSteps String[] @default([])
+  targetMuscle     String?
+  secondaryMuscles String[] @default([])
+  imageUrl         String?
+  animationUrl     String?
+
   workoutExercises WorkoutExercise[]
 
   createdAt DateTime @default(now())

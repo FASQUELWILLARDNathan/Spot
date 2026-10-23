@@ -414,7 +414,7 @@ onMounted(() => {
               { label: 'Progression', to: '/progress', icon: TrendingUp },
               { label: 'Mes amis', to: '/friends', icon: Users },
               { label: 'Mon profil', to: '/profile', icon: UserRound },
-            ]"
+              { label: 'Exercices', to: '/exercises', icon: Dumbbell}]",
             :key="item.label"
             :to="item.to"
             class="group flex min-h-32 flex-col justify-between rounded-2xl border border-white/10 bg-[#19232F] p-5 transition hover:border-[#C9F36A]/40 hover:bg-[#202D3A]"

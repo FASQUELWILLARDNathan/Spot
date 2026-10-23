@@ -147,6 +147,32 @@ const filteredCatalog = computed(() => {
   })
 })
 
+const uniqueRecentWorkouts = computed(() => {
+  const seen = new Set<string>()
+
+  return [...previousWorkouts.value]
+    .filter(workout => workout.endedAt !== null)
+    .sort(
+      (a, b) =>
+        new Date(b.startedAt).getTime() -
+        new Date(a.startedAt).getTime(),
+    )
+    .filter(workout => {
+      const normalizedName = workout.name
+        .trim()
+        .toLocaleLowerCase('fr-FR')
+        .replace(/\s+/g, ' ')
+
+      if (seen.has(normalizedName)) {
+        return false
+      }
+
+      seen.add(normalizedName)
+      return true
+    })
+    .slice(0, 8)
+})
+
 function muscleLabel(group: MuscleGroup): string {
   return muscleGroups.find((item) => item.value === group)?.label ?? group
 }
@@ -467,7 +493,7 @@ onMounted(() => {
     </div>
 
     <div
-        v-else-if="!previousWorkouts.length"
+        v-else-if="!uniqueRecentWorkouts.length"
         class="rounded-2xl border border-dashed border-white/10 p-5 text-sm text-slate-400"
     >
         Tu n'as pas encore de séance terminée à réutiliser.
@@ -476,7 +502,7 @@ onMounted(() => {
 
     <div v-else class="space-y-2">
         <button
-        v-for="previous in previousWorkouts"
+        v-for="previous in uniqueRecentWorkouts"
         :key="previous.id"
         type="button"
         :disabled="loadingTemplateId !== null"
