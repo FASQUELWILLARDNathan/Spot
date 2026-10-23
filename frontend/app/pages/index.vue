@@ -157,6 +157,10 @@ function formatDate(value: string): string {
   }).format(new Date(value))
 }
 
+function openCookiePreferences() {
+  window.dispatchEvent(new Event('spot:open-cookie-preferences'))
+}
+
 function formatDuration(minutes: number): string {
   if (minutes < 60) return `${minutes} min`
 
@@ -199,7 +203,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <main class="min-h-screen bg-[#0B1018] px-4 pb-28 pt-6 text-white sm:px-6">
+  <main class="min-h-screen bg-[#0B1018] px-4 pb-24 pt-6 text-white sm:px-6">
     <div class="mx-auto max-w-5xl space-y-8">
 
       <!-- HEADER -->
@@ -248,10 +252,6 @@ onMounted(() => {
         <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">
           Salut {{ firstName }} 👋
         </h1>
-
-        <p class="mt-3 text-sm text-slate-400 sm:text-base">
-          Prêt à te rapprocher de tes objectifs ?
-        </p>
       </section>
 
       <!-- MAIN WORKOUT CARD -->
@@ -435,6 +435,45 @@ onMounted(() => {
           </NuxtLink>
         </div>
       </section>
+      <footer class="mx-auto mt-10 w-full max-w-5xl border-t border-white/[0.07] pt-6">
+        <div class="flex flex-col items-center justify-between gap-4 sm:flex-row">
+          <div class="flex items-center gap-2">
+            <span class="text-base font-black tracking-tight">
+              spot<span class="text-[#C9F36A]">.</span>
+            </span>
+            <span class="text-xs text-slate-500">© 2026</span>
+          </div>
+
+          <nav
+            aria-label="Informations légales"
+            class="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-slate-400"
+          >
+            <NuxtLink to="/mentions-legales" class="transition hover:text-[#C9F36A]">
+              Mentions légales
+            </NuxtLink>
+
+            <NuxtLink to="/confidentialite" class="transition hover:text-[#C9F36A]">
+              Confidentialité
+            </NuxtLink>
+
+            <NuxtLink to="/cookies" class="transition hover:text-[#C9F36A]">
+              Cookies
+            </NuxtLink>
+
+            <NuxtLink to="/cgu" class="transition hover:text-[#C9F36A]">
+              CGU
+            </NuxtLink>
+
+            <button
+              type="button"
+              class="transition hover:text-[#C9F36A]"
+              @click="openCookiePreferences"
+            >
+              Préférences cookies
+            </button>
+          </nav>
+        </div>
+      </footer>
     </div>
   </main>
 </template>

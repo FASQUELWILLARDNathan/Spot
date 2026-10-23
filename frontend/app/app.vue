@@ -2,4 +2,5 @@
   <NuxtLayout>
     <NuxtPage />
   </NuxtLayout>
+  <CookieBanner />
 </template>
