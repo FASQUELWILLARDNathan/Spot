@@ -35,7 +35,10 @@ export async function getPersonalRecords(
   userId: string,
 ): Promise<PersonalRecord[]> {
   const workouts = await prisma.workout.findMany({
-    where: { userId },
+    where: {
+      userId,
+      endedAt: { not: null },
+    },
     select: {
       id: true,
       name: true,

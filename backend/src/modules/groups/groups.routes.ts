@@ -4,6 +4,11 @@ import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
 import { requireAuth } from "../../middlewares/requireAuth.js";
 import { Prisma } from "@prisma/client";
+import {
+  groupCreationLimiter,
+  groupInvitationLimiter,
+  invitationResponseLimiter,
+} from "../../middlewares/social-rate-limit.js";
 
 export const groupsRouter = Router();
 
@@ -48,7 +53,7 @@ groupsRouter.get("/", async (_req, res, next) => {
 });
 
 // Créer un groupe
-groupsRouter.post("/", async (req, res, next) => {
+groupsRouter.post("/", groupCreationLimiter, async (req, res, next) => {
   try {
     const parsed = createGroupSchema.safeParse(req.body);
 
@@ -141,7 +146,10 @@ const invitationSchema = z.object({
 }).strict();
 
 // Inviter un ami dans un groupe
-groupsRouter.post("/:id/invitations", async (req, res, next) => {
+groupsRouter.post(
+  "/:id/invitations",
+  groupInvitationLimiter,
+  async (req, res, next) => {
   try {
     const groupId = z.uuid().safeParse(req.params.id);
     const body = invitationSchema.safeParse(req.body);
@@ -292,7 +300,7 @@ groupsRouter.get("/invitations/received", async (_req, res, next) => {
 });
 
 // Accepter ou refuser une invitation
-groupsRouter.post("/invitations/:id/respond", async (req, res, next) => {
+groupsRouter.post("/invitations/:id/respond", invitationResponseLimiter, async (req, res, next) => {
   try {
     const invitationId = z.uuid().safeParse(req.params.id);
     const body = z.object({

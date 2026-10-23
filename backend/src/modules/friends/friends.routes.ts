@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
 import { requireAuth } from "../../middlewares/requireAuth.js";
+import { friendRequestLimiter } from "../../middlewares/social-rate-limit.js";
 
 export const friendsRouter = Router();
 
@@ -116,7 +117,7 @@ friendsRouter.get("/", async (_req, res, next) => {
 });
 
 // Envoyer une demande d'ami
-friendsRouter.post("/requests", async (req, res, next) => {
+friendsRouter.post("/requests", friendRequestLimiter, async (req, res, next) => {
   try {
     const parsed = z.object({
       receiverId: z.uuid(),

@@ -134,64 +134,6 @@ profileRouter.get("/", async (_req, res, next) => {
   }
 });
 
-profileRouter.get("/", async (_req, res, next) => {
-  try {
-    const userId = res.locals.user.id as string;
-
-    const [user, profile, workoutCount, friendCount] =
-      await Promise.all([
-        prisma.user.findUnique({
-          where: { id: userId },
-          select: {
-            id: true,
-            username: true,
-            firstName: true,
-            lastName: true,
-          },
-        }),
-
-        prisma.userProfile.findUnique({
-          where: { userId },
-        }),
-
-        prisma.workout.count({
-          where: {
-            userId,
-            endedAt: { not: null },
-          },
-        }),
-
-        prisma.friendship.count({
-          where: {
-            status: "ACCEPTED",
-            OR: [
-              { requesterId: userId },
-              { receiverId: userId },
-            ],
-          },
-        }),
-      ]);
-
-    if (!user) {
-      res.status(404).json({
-        error: "Utilisateur introuvable.",
-      });
-      return;
-    }
-
-    res.json({
-      user,
-      profile,
-      stats: {
-        workoutCount,
-        friendCount,
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
 
 profileRouter.patch("/", async (req, res, next) => {
   try {

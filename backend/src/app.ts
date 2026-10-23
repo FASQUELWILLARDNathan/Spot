@@ -26,11 +26,20 @@ app.disable("x-powered-by");
 
 app.use(helmet());
 
+const allowedOrigins = new Set(
+  [
+    ...(process.env.NODE_ENV === "production"
+      ? []
+      : ["http://localhost:3000"]),
+    process.env.FRONTEND_ORIGIN,
+  ].filter((origin): origin is string => Boolean(origin)),
+);
+
 app.use(
   cors({
-    origin: "http://localhost:3000",
+    origin: [...allowedOrigins],
     credentials: true,
-  })
+  }),
 );
 
 app.use(express.json({ limit: "100kb" }));
@@ -38,21 +47,20 @@ app.use(cookieParser());
 
 // Protection des requêtes qui modifient des données.
 // Pour le développement local, on autorise le frontend Nuxt.
-app.use((req, _res, next) => {
+
+app.use((req, res, next) => {
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) {
     return next();
   }
 
-  const allowedOrigins = new Set([
-    "http://localhost:3000",
-  ]);
+  const origin = req.headers.origin;
 
-  app.use(
-    cors({
-      origin: [...allowedOrigins],
-      credentials: true,
-    }),
-  );
+  if (!origin || !allowedOrigins.has(origin)) {
+    res.status(403).json({
+      error: "Origine de la requête non autorisée",
+    });
+    return;
+  }
 
   next();
 });
