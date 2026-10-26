@@ -17,6 +17,16 @@ import {
   X,
 } from 'lucide-vue-next'
 
+type Exercise = {
+  id: string
+  name: string
+  muscleGroup: string
+  equipment: string
+  targetMuscle: string | null
+  imageUrl: string | null
+  animationUrl: string | null
+}
+
 type PublicUser = {
   id: string
   username: string
@@ -111,7 +121,7 @@ type LeaderboardMetric =
   | 'totalVolumeKg'
   | 'totalDurationMinutes'
 
-type Tab = 'progress' | 'records' | 'members' | 'leaderboard'
+type Tab = 'workouts' |'progress' | 'records' | 'members' | 'leaderboard'
 type Metric = 'weightKg' | 'muscleMassKg' | 'bodyFatPct'
 
 const route = useRoute()
@@ -132,7 +142,7 @@ const inviteMessage = ref('')
 const invitingId = ref<string | null>(null)
 const invitedIds = ref<string[]>([])
 
-const activeTab = ref<Tab>('progress')
+const activeTab = ref<Tab>('workouts')
 const selectedMetric = ref<Metric>('weightKg')
 const selectedDays = ref(90)
 const selectedExerciseId = ref('')
@@ -150,6 +160,7 @@ const groupActionLoading = ref(false)
 const groupActionError = ref('')
 
 const currentUserId = ref<string | null>(null)
+
 
 const isGroupOwner = computed(() =>
   !!group.value &&
@@ -386,6 +397,10 @@ function leaderboardValue(member: LeaderboardEntry): string {
   return `${member.totalDurationMinutes} min`
 }
 
+function handleGroupWorkoutStarted(workoutId: string) {
+  void navigateTo(`/workouts/${workoutId}`)
+}
+
 async function loadGroup() {
   const response = await $fetch<{ group: Group }>(
     `${apiBase}/groups/${route.params.id}`,
@@ -408,6 +423,18 @@ async function loadStats() {
       'Impossible de charger les statistiques.',
     )
   }
+}
+
+async function loadExercises(search = '') {
+  const response = await $fetch<{ exercises: Exercise[] }>(
+    `${apiBase}/exercises`,
+    {
+      credentials: 'include',
+      query: search ? { search } : {},
+    },
+  )
+
+  return response.exercises
 }
 
 async function loadRecords() {
@@ -702,6 +729,7 @@ onMounted(() => {
             { id: 'records', label: 'Records' },
             { id: 'members', label: 'Membres' },
             { id: 'leaderboard', label: 'Classement' },
+            { id: 'workouts', label: 'Séances' },
           ]"
           :key="tab.id"
           type="button"
@@ -717,8 +745,16 @@ onMounted(() => {
         </button>
       </div>
 
+      <!-- SÉANCES COMMUNES -->
+        <div v-if="activeTab === 'workouts'">
+          <GroupWorkouts
+            :group-id="group.id"
+            @started="handleGroupWorkoutStarted"
+          />
+        </div>
+
       <!-- PROGRESSION -->
-      <div v-if="activeTab === 'progress'" class="space-y-6">
+      <div v-else-if="activeTab === 'progress'" class="space-y-6">
         <p v-if="statsError" role="alert" class="text-sm text-red-400">
           {{ statsError }}
         </p>

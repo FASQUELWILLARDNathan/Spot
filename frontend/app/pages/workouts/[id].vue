@@ -18,19 +18,20 @@ import {
   SkipForward,
   Trophy,
 } from 'lucide-vue-next'
-
 definePageMeta({
   middleware: 'auth',
 })
-
 interface WorkoutSet {
   id?: string
   weightKg: number | string | null
   reps: number | null
   rpe: number | string | null
   completed: boolean
+  targetRepsMin?: number | null
+  targetRepsMax?: number | null
+  restSeconds?: number | null
+  targetBlockPosition?: number | null
 }
-
 interface WorkoutExercise {
   id: string
   exerciseId: string
@@ -43,7 +44,6 @@ interface WorkoutExercise {
   }
   sets: WorkoutSet[]
 }
-
 interface Workout {
   id: string
   name: string
@@ -51,27 +51,28 @@ interface Workout {
   endedAt: string | null
   exercises: WorkoutExercise[]
 }
-
 interface Exercise {
   id: string
   name: string
   muscleGroup: string
   equipment: string
 }
-
 interface EditableSet {
+  id?: string
   weightKg: number | string | null
   reps: number | string | null
   rpe: number | string | null
   completed: boolean
+  targetRepsMin?: number | null
+  targetRepsMax?: number | null
+  restSeconds?: number | null
+  targetBlockPosition?: number | null
 }
-
 interface EditableExercise {
   exerciseId: string
   name: string
   sets: EditableSet[]
 }
-
 interface NewPersonalRecord {
   exerciseId: string
   exerciseName: string
@@ -79,24 +80,18 @@ interface NewPersonalRecord {
   previousValue: number | null
   newValue: number
 }
-
 interface WorkoutSaveResponse {
   workout: Workout
   newRecords: NewPersonalRecord[]
 }
-
 type SaveStatus = 'saved' | 'pending' | 'saving' | 'error'
-type RestDuration = 60 | 90 | 120 | 180
-
+type RestDuration = number
 const route = useRoute()
 const router = useRouter()
-
 const workoutId = computed(() => String(route.params.id))
-
 const workout = ref<Workout | null>(null)
 const name = ref('')
 const exercises = ref<EditableExercise[]>([])
-
 const loading = ref(true)
 const saving = ref(false)
 const finishing = ref(false)
@@ -104,29 +99,22 @@ const deleting = ref(false)
 const error = ref('')
 const success = ref('')
 const newRecords = ref<NewPersonalRecord[]>([])
-
 const showExercisePicker = ref(false)
 const search = ref('')
 const catalog = ref<Exercise[]>([])
 const catalogLoading = ref(false)
-
 const saveStatus = ref<SaveStatus>('saved')
 const lastSavedAt = ref<Date | null>(null)
-
 const now = ref(Date.now())
 const restDuration = ref<RestDuration>(90)
 const restEndsAt = ref<number | null>(null)
-
 const isFinished = computed(() => Boolean(workout.value?.endedAt))
-
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 let isHydrating = false
 let saveQueue: Promise<void> = Promise.resolve()
 let changeVersion = 0
 let savedVersion = 0
-
 let clockInterval: ReturnType<typeof setInterval> | null = null
-
 const filteredCatalog = computed(() =>
   catalog.value.filter((exercise) =>
     exercise.name.toLocaleLowerCase('fr').includes(
@@ -134,11 +122,9 @@ const filteredCatalog = computed(() =>
     ),
   ),
 )
-
 const totalSets = computed(() =>
   exercises.value.reduce((total, exercise) => total + exercise.sets.length, 0),
 )
-
 const completedSets = computed(() =>
   exercises.value.reduce(
     (total, exercise) =>
@@ -146,70 +132,48 @@ const completedSets = computed(() =>
     0,
   ),
 )
-
 const restStorageKey = computed(
   () => `spot:rest:${workoutId.value}`,
 )
-
 const restDurationStorageKey = 'spot:rest-duration'
-
-
 const MAX_WORKOUT_SECONDS = 3 * 60 * 60
-
 const workoutElapsedSeconds = computed(() => {
   if (!workout.value?.startedAt) return 0
-
   const start = new Date(workout.value.startedAt).getTime()
-
   if (!Number.isFinite(start)) return 0
-
   const end = workout.value.endedAt
     ? new Date(workout.value.endedAt).getTime()
     : now.value
-
   const elapsed = Math.max(0, Math.floor((end - start) / 1000))
-
   return Math.min(elapsed, MAX_WORKOUT_SECONDS)
 })
-
 const workoutTimeExpired = computed(() => {
   if (!workout.value || isFinished.value) return false
-
   const start = new Date(workout.value.startedAt).getTime()
-
   return Number.isFinite(start)
     && now.value - start >= MAX_WORKOUT_SECONDS * 1000
 })
-
-
 const workoutElapsedLabel = computed(() =>
   formatDuration(workoutElapsedSeconds.value),
 )
-
 const restRemainingSeconds = computed(() => {
   if (restEndsAt.value === null) return 0
-
   return Math.max(
     0,
     Math.ceil((restEndsAt.value - now.value) / 1000),
   )
 })
-
 const restIsRunning = computed(
   () => restEndsAt.value !== null && restRemainingSeconds.value > 0,
 )
-
 const restRemainingLabel = computed(() =>
   formatDuration(restRemainingSeconds.value),
 )
-
 function toNullableNumber(value: number | string | null): number | null {
   if (value === null || value === '') return null
-
   const result = Number(value)
   return Number.isFinite(result) ? result : null
 }
-
 function emptySet(): EditableSet {
   return {
     weightKg: null,
@@ -218,14 +182,12 @@ function emptySet(): EditableSet {
     completed: false,
   }
 }
-
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat('fr-FR', {
     dateStyle: 'long',
     timeStyle: 'short',
   }).format(new Date(value))
 }
-
 function recordLabel(type: NewPersonalRecord['type']): string {
   switch (type) {
     case 'MAX_WEIGHT':
@@ -236,31 +198,38 @@ function recordLabel(type: NewPersonalRecord['type']): string {
       return 'Record de 1RM estimé'
   }
 }
-
 function formatRecordValue(record: NewPersonalRecord): string {
   return `${new Intl.NumberFormat('fr-FR', {
     maximumFractionDigits: 2,
   }).format(record.newValue)} kg`
 }
-
 function hydrateWorkout(data: Workout): void {
   isHydrating = true
-
   workout.value = data
   name.value = data.name
-
   exercises.value = data.exercises.map((item) => ({
     exerciseId: item.exerciseId,
     name: item.exercise.name,
     sets: item.sets.map((set) => ({
+      id: set.id,
+      targetRepsMin: set.targetRepsMin ?? null,
+      targetRepsMax: set.targetRepsMax ?? null,
+      restSeconds: set.restSeconds ?? null,
+      targetBlockPosition: set.targetBlockPosition ?? null,
       weightKg: toNullableNumber(set.weightKg),
       reps: set.reps,
       rpe: toNullableNumber(set.rpe),
       completed: set.completed,
     })),
   }))
-
   isHydrating = false
+}
+function targetRepsLabel(set: EditableSet): string | null {
+  const min = set.targetRepsMin
+  const max = set.targetRepsMax
+  if (min == null && max == null) return null
+  if (min != null && max != null) return min === max ? `${min} reps` : `${min}–${max} reps`
+  return `${min ?? max} reps`
 }
 
 function formatDuration(totalSeconds: number): string {
@@ -268,17 +237,13 @@ function formatDuration(totalSeconds: number): string {
   const hours = Math.floor(seconds / 3600)
   const minutes = Math.floor((seconds % 3600) / 60)
   const remainingSeconds = seconds % 60
-
   const pad = (value: number) =>
     String(value).padStart(2, '0')
-
   if (hours > 0) {
     return `${pad(hours)}:${pad(minutes)}:${pad(remainingSeconds)}`
   }
-
   return `${pad(minutes)}:${pad(remainingSeconds)}`
 }
-
 function warnBeforeLeave(event: BeforeUnloadEvent): void {
   if (
     saveStatus.value === 'pending' ||
@@ -289,49 +254,37 @@ function warnBeforeLeave(event: BeforeUnloadEvent): void {
     event.returnValue = ''
   }
 }
-
 onMounted(() => {
   window.addEventListener('beforeunload', warnBeforeLeave)
 })
-
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', warnBeforeLeave)
 })
-
-function startRest(): void {
+function startRest(seconds: number = restDuration.value): void {
   if (isFinished.value) return
-
-  const end = Date.now() + restDuration.value * 1000
-
+  const end = Date.now() + Math.max(0, seconds) * 1000
   restEndsAt.value = end
   now.value = Date.now()
-
   localStorage.setItem(restStorageKey.value, String(end))
 }
-
 function skipRest(): void {
   restEndsAt.value = null
   localStorage.removeItem(restStorageKey.value)
 }
-
 function setRestDuration(value: RestDuration): void {
   restDuration.value = value
   localStorage.setItem(restDurationStorageKey, String(value))
 }
-
 function restoreRestTimer(): void {
   const storedDuration = Number(
     localStorage.getItem(restDurationStorageKey),
   )
-
   if ([60, 90, 120, 180].includes(storedDuration)) {
     restDuration.value = storedDuration as RestDuration
   }
-
   const storedEnd = Number(
     localStorage.getItem(restStorageKey.value),
   )
-
   if (storedEnd > Date.now()) {
     restEndsAt.value = storedEnd
   } else {
@@ -339,10 +292,8 @@ function restoreRestTimer(): void {
     restEndsAt.value = null
   }
 }
-
 function tickClocks(): void {
   now.value = Date.now()
-
   if (
     restEndsAt.value !== null &&
     now.value >= restEndsAt.value
@@ -350,48 +301,38 @@ function tickClocks(): void {
     skipRest()
   }
 }
-
 function handleVisibilityChange(): void {
   if (document.visibilityState === 'visible') {
     tickClocks()
   }
 }
-
 onMounted(() => {
   restoreRestTimer()
-
   tickClocks()
-
   clockInterval = setInterval(tickClocks, 1000)
-
   document.addEventListener(
     'visibilitychange',
     handleVisibilityChange,
   )
 })
-
 onBeforeUnmount(() => {
   if (clockInterval !== null) {
     clearInterval(clockInterval)
     clockInterval = null
   }
-
   document.removeEventListener(
     'visibilitychange',
     handleVisibilityChange,
   )
 })
-
 async function loadWorkout(): Promise<void> {
   loading.value = true
   error.value = ''
-
   try {
     const response = await $fetch<{ workout: Workout }>(
       `/api/workouts/${workoutId.value}`,
       { credentials: 'include' },
     )
-
     hydrateWorkout(response.workout)
   } catch {
     error.value = 'Impossible de charger cette séance.'
@@ -399,16 +340,13 @@ async function loadWorkout(): Promise<void> {
     loading.value = false
   }
 }
-
 async function loadCatalog(): Promise<void> {
   catalogLoading.value = true
-
   try {
     const response = await $fetch<{ exercises: Exercise[] }>(
       '/api/exercises',
       { credentials: 'include' },
     )
-
     catalog.value = response.exercises
   } catch {
     error.value = 'Impossible de charger les exercices.'
@@ -416,43 +354,38 @@ async function loadCatalog(): Promise<void> {
     catalogLoading.value = false
   }
 }
-
 async function openExercisePicker(): Promise<void> {
   showExercisePicker.value = true
   search.value = ''
-
   if (!catalog.value.length) {
     await loadCatalog()
   }
 }
-
 function addExercise(exercise: Exercise): void {
   exercises.value.push({
     exerciseId: exercise.id,
     name: exercise.name,
     sets: [emptySet()],
   })
-
   showExercisePicker.value = false
   success.value = ''
 }
-
 function removeExercise(index: number): void {
   exercises.value.splice(index, 1)
 }
-
 function addSet(exercise: EditableExercise): void {
   const previous = exercise.sets.at(-1)
-
   exercise.sets.push({
     weightKg: previous?.weightKg ?? null,
     reps: previous?.reps ?? null,
     rpe: previous?.rpe ?? null,
     completed: false,
+    targetRepsMin: null,
+    targetRepsMax: null,
+    restSeconds: null,
+    targetBlockPosition: null,
   })
 }
-
-
 function reusePreviousPerformance(
   exercise: EditableExercise,
   previousSets: {
@@ -462,7 +395,6 @@ function reusePreviousPerformance(
   }[],
 ): void {
   if (isFinished.value || previousSets.length === 0) return
-
   const hasExistingData = exercise.sets.some(
     (set) =>
       set.completed ||
@@ -470,7 +402,6 @@ function reusePreviousPerformance(
       (set.reps !== null && set.reps !== '') ||
       (set.rpe !== null && set.rpe !== ''),
   )
-
   if (
     hasExistingData &&
     !window.confirm(
@@ -479,34 +410,34 @@ function reusePreviousPerformance(
   ) {
     return
   }
-
-  exercise.sets = previousSets.map((set) => ({
+  exercise.sets = previousSets.map((set, index) => ({
+    id: exercise.sets[index]?.id,
+    targetRepsMin: exercise.sets[index]?.targetRepsMin ?? null,
+    targetRepsMax: exercise.sets[index]?.targetRepsMax ?? null,
+    restSeconds: exercise.sets[index]?.restSeconds ?? null,
+    targetBlockPosition: exercise.sets[index]?.targetBlockPosition ?? null,
     weightKg: set.weightKg,
     reps: set.reps,
     rpe: set.rpe,
     completed: false,
   }))
-
   success.value = 'Performances précédentes reprises.'
 }
-
 function removeSet(exercise: EditableExercise, index: number): void {
   exercise.sets.splice(index, 1)
 }
-
 function normalizeNumber(value: number | string | null): number | null {
   if (value === null || value === '') return null
-
   const number = Number(value)
   return Number.isFinite(number) ? number : null
 }
-
 function buildPayload() {
   return {
     name: name.value.trim(),
     exercises: exercises.value.map((exercise) => ({
       exerciseId: exercise.exerciseId,
       sets: exercise.sets.map((set) => ({
+        ...(set.id ? { id: set.id } : {}),
         weightKg: normalizeNumber(set.weightKg),
         reps: normalizeNumber(set.reps),
         rpe: normalizeNumber(set.rpe),
@@ -515,50 +446,38 @@ function buildPayload() {
     })),
   }
 }
-
 function clearSaveTimer(): void {
   if (saveTimer !== null) {
     clearTimeout(saveTimer)
     saveTimer = null
   }
 }
-
 function queueAutoSave(): void {
   if (!workout.value || isFinished.value) return
-
   clearSaveTimer()
   saveStatus.value = 'pending'
-
   saveTimer = setTimeout(() => {
     saveTimer = null
     void autoSave()
   }, 1500)
 }
-
 function toggleSetCompleted(set: EditableSet): void {
   const wasCompleted = set.completed
-
   set.completed = !wasCompleted
-
   if (!wasCompleted && set.completed) {
-    startRest()
+    if (set.restSeconds === 0) skipRest()
+    else startRest(set.restSeconds ?? restDuration.value)
   }
 }
-
 async function autoSave(): Promise<void> {
   if (!workout.value || isFinished.value) return
-
   clearSaveTimer()
-
   const version = changeVersion
   const payload = buildPayload()
-
   // Chaque requête attend la précédente.
   const task = saveQueue.then(async () => {
     if (version <= savedVersion) return
-
     saveStatus.value = 'saving'
-
     try {
       const response = await $fetch<WorkoutSaveResponse>(
         `/api/workouts/${workoutId.value}`,
@@ -568,14 +487,11 @@ async function autoSave(): Promise<void> {
             body: payload,
         },
         )
-
         if (response.newRecords.length > 0) {
         newRecords.value = response.newRecords
       }
-
       savedVersion = version
       lastSavedAt.value = new Date()
-
       saveStatus.value =
         changeVersion === savedVersion ? 'saved' : 'pending'
     } catch {
@@ -583,57 +499,42 @@ async function autoSave(): Promise<void> {
       throw new Error('Échec de la sauvegarde automatique')
     }
   })
-
   // On garde une file utilisable même après un échec.
   saveQueue = task.catch(() => undefined)
-
   await task
 }
-
 watch(
   [name, exercises],
   () => {
     if (isHydrating || !workout.value || isFinished.value) return
-
     changeVersion++
     queueAutoSave()
   },
   { deep: true },
 )
-
 onBeforeUnmount(() => {
   clearSaveTimer()
 })
-
-
 async function saveWorkout(): Promise<boolean> {
   if (isFinished.value || saving.value) return false
-
   if (!name.value.trim()) {
     error.value = 'Donne un nom à ta séance.'
     return false
   }
-
   saving.value = true
   error.value = ''
-
   try {
     clearSaveTimer()
-
     // Attend les sauvegardes déjà en cours.
     await saveQueue
-
     if (changeVersion > savedVersion) {
       await autoSave()
     }
-
     await saveQueue
-
     if (saveStatus.value === 'error') {
       error.value = 'La sauvegarde a échoué.'
       return false
     }
-
     success.value = 'Séance enregistrée.'
     return true
   } catch {
@@ -643,17 +544,12 @@ async function saveWorkout(): Promise<boolean> {
     saving.value = false
   }
 }
-
-
 async function finishWorkout(): Promise<void> {
   if (isFinished.value || finishing.value) return
-
   const saved = await saveWorkout()
   if (!saved) return
-
   finishing.value = true
   error.value = ''
-
   try {
     const response = await $fetch<{ workout: Workout }>(
       `/api/workouts/${workoutId.value}/finish`,
@@ -662,7 +558,6 @@ async function finishWorkout(): Promise<void> {
         credentials: 'include',
       },
     )
-
     hydrateWorkout(response.workout)
     success.value = 'Séance terminée !'
     skipRest()
@@ -672,21 +567,16 @@ async function finishWorkout(): Promise<void> {
     finishing.value = false
   }
 }
-
 async function deleteWorkout(): Promise<void> {
   if (deleting.value) return
-
   if (!window.confirm('Supprimer définitivement cette séance ?')) return
-
   deleting.value = true
   error.value = ''
-
   try {
     await $fetch(`/api/workouts/${workoutId.value}`, {
       method: 'DELETE',
       credentials: 'include',
     })
-
     await router.push('/workouts')
   } catch {
     error.value = 'Impossible de supprimer la séance.'
@@ -694,10 +584,8 @@ async function deleteWorkout(): Promise<void> {
     deleting.value = false
   }
 }
-
 onMounted(loadWorkout)
 </script>
-
 <template>
   <main class="mx-auto max-w-2xl px-5 pb-32 pt-7">
     <NuxtLink
@@ -707,19 +595,16 @@ onMounted(loadWorkout)
       <ArrowLeft :size="18" />
       Mes séances
     </NuxtLink>
-
     <div
       v-if="loading"
       class="flex justify-center py-20 text-slate-400"
     >
       <LoaderCircle :size="30" class="animate-spin" />
     </div>
-
     <div v-else-if="!workout" class="rounded-2xl border border-white/10 p-6">
       <p class="text-white">
         {{ error || 'Séance introuvable.' }}
       </p>
-
       <button
         class="mt-4 text-sm font-semibold text-lime-300"
         @click="loadWorkout"
@@ -727,13 +612,11 @@ onMounted(loadWorkout)
         Réessayer
       </button>
     </div>
-
     <template v-else>
       <header class="mb-7">
         <p class="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-lime-300">
           Spot / Séance
         </p>
-
         <input
           v-model="name"
           :disabled="isFinished"
@@ -741,13 +624,11 @@ onMounted(loadWorkout)
           class="w-full border-none bg-transparent p-0 text-3xl font-bold tracking-tight text-white outline-none disabled:opacity-100"
           placeholder="Nom de la séance"
         />
-
         <div class="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-400">
           <span class="inline-flex items-center gap-1.5">
             <Clock3 :size="14" />
             {{ formatDate(workout.startedAt) }}
           </span>
-
           <span
             class="rounded-full px-2.5 py-1 font-semibold"
             :class="
@@ -760,8 +641,6 @@ onMounted(loadWorkout)
           </span>
         </div>
       </header>
-
-      
         <section
         v-if="workout"
         class="mb-6 space-y-4"
@@ -777,18 +656,15 @@ onMounted(loadWorkout)
                 Durée de séance
                 </span>
             </div>
-
             <p
                 class="text-2xl font-bold tabular-nums tracking-tight text-white"
             >
                 {{ workoutElapsedLabel }}
             </p>
-
             <p class="mt-2 text-xs text-slate-500">
                 {{ isFinished ? 'Séance terminée' : 'En cours' }}
             </p>
             </div>
-
             <!-- Minuteur de repos -->
             <div
             class="rounded-2xl border border-white/10 bg-white/[0.03] p-4"
@@ -799,20 +675,17 @@ onMounted(loadWorkout)
                 Repos
                 </span>
             </div>
-
             <p
                 class="text-2xl font-bold tabular-nums tracking-tight"
                 :class="restIsRunning ? 'text-lime-300' : 'text-white'"
             >
                 {{ restIsRunning ? restRemainingLabel : '00:00' }}
             </p>
-
             <p class="mt-2 text-xs text-slate-500">
                 {{ restIsRunning ? 'Récupération en cours' : 'Prêt' }}
             </p>
             </div>
         </div>
-
         <!-- Contrôles du repos -->
         <div
             v-if="!isFinished"
@@ -822,12 +695,10 @@ onMounted(loadWorkout)
             <h3 class="text-sm font-semibold text-white">
                 Temps de repos
             </h3>
-
             <span class="text-xs text-slate-500">
                 Entre les séries
             </span>
             </div>
-
             <div class="mb-4 grid grid-cols-4 gap-2">
             <button
                 v-for="duration in ([60, 90, 120, 180] as const)"
@@ -844,17 +715,15 @@ onMounted(loadWorkout)
                 {{ duration }}s
             </button>
             </div>
-
             <div class="grid grid-cols-2 gap-3">
             <button
                 type="button"
                 class="flex items-center justify-center gap-2 rounded-xl bg-lime-300 px-4 py-3 font-semibold text-slate-950 hover:bg-lime-200"
-                @click="startRest"
+                @click="startRest()"
             >
                 <Play :size="17" />
                 {{ restIsRunning ? 'Relancer' : 'Démarrer' }}
             </button>
-
             <button
                 type="button"
                 :disabled="!restIsRunning"
@@ -867,8 +736,6 @@ onMounted(loadWorkout)
             </div>
         </div>
         </section>
-
-
       <div
         v-if="!isFinished"
         class="mb-5 flex items-center gap-2 text-xs"
@@ -878,25 +745,21 @@ onMounted(loadWorkout)
             :size="14"
             class="animate-spin text-lime-300"
         />
-
         <Clock3
             v-else-if="saveStatus === 'pending'"
             :size="14"
             class="text-amber-300"
         />
-
         <Check
             v-else-if="saveStatus === 'saved'"
             :size="14"
             class="text-lime-300"
         />
-
         <X
             v-else
             :size="14"
             class="text-red-400"
         />
-
         <span
             :class="
             saveStatus === 'error'
@@ -916,7 +779,6 @@ onMounted(loadWorkout)
                     : 'Toutes les modifications sont enregistrées'
             }}
         </span>
-
         <button
             v-if="saveStatus === 'error'"
             type="button"
@@ -926,7 +788,6 @@ onMounted(loadWorkout)
             Réessayer
         </button>
         </div>
-
       <section class="mb-7 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
         <div class="mb-3 flex items-center justify-between">
           <span class="text-sm text-slate-400">Progression des séries</span>
@@ -934,7 +795,6 @@ onMounted(loadWorkout)
             {{ completedSets }} / {{ totalSets }}
           </span>
         </div>
-
         <div class="h-2 overflow-hidden rounded-full bg-white/10">
           <div
             class="h-full rounded-full bg-lime-300 transition-all"
@@ -943,27 +803,22 @@ onMounted(loadWorkout)
             }"
           />
         </div>
-
         <p class="mt-3 text-xs text-slate-500">
           {{ exercises.length }} exercices dans cette séance
         </p>
       </section>
-
       <div
         v-if="error"
         class="mb-5 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300"
       >
         {{ error }}
       </div>
-
       <div
         v-if="success"
         class="mb-5 rounded-xl border border-lime-300/20 bg-lime-300/10 p-3 text-sm text-lime-300"
       >
         {{ success }}
       </div>
-
-      
         <!-- Nouveaux records personnels -->
         <section
         v-if="newRecords.length > 0"
@@ -975,18 +830,15 @@ onMounted(loadWorkout)
             <div class="rounded-xl bg-lime-300/20 p-3 text-lime-300">
                 <Trophy :size="24" />
             </div>
-
             <div>
                 <h2 class="text-lg font-bold text-lime-300">
                 Nouveau PR !
                 </h2>
-
                 <p class="mt-1 text-xs text-slate-300">
                 Tu viens de battre un record personnel.
                 </p>
             </div>
             </div>
-
             <button
             type="button"
             class="rounded-lg p-2 text-slate-400 hover:text-white"
@@ -996,7 +848,6 @@ onMounted(loadWorkout)
             <X :size="18" />
             </button>
         </div>
-
         <div class="mt-4 space-y-2">
             <div
             v-for="record in newRecords"
@@ -1006,11 +857,9 @@ onMounted(loadWorkout)
             <p class="text-sm font-semibold text-white">
                 {{ record.exerciseName }}
             </p>
-
             <p class="mt-1 text-xs text-slate-400">
                 {{ recordLabel(record.type) }}
             </p>
-
             <div class="mt-2 flex items-center gap-2">
                 <span
                 v-if="record.previousValue !== null"
@@ -1018,21 +867,18 @@ onMounted(loadWorkout)
                 >
                 {{ record.previousValue }} kg
                 </span>
-
                 <span
                 v-else
                 class="text-xs text-slate-400"
                 >
                 Premier record
                 </span>
-
                 <span class="font-bold text-lime-300">
                 {{ formatRecordValue(record) }}
                 </span>
             </div>
             </div>
         </div>
-
         <NuxtLink
             to="/records"
             class="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-lime-300 hover:underline"
@@ -1041,7 +887,6 @@ onMounted(loadWorkout)
             Voir tous mes records
         </NuxtLink>
         </section>
-
       <section class="space-y-4">
         <article
           v-for="(exercise, exerciseIndex) in exercises"
@@ -1053,7 +898,6 @@ onMounted(loadWorkout)
               :exercise-id="exercise.exerciseId"
               :name="exercise.name"
             />
-
             <button
               v-if="!isFinished"
               type="button"
@@ -1064,7 +908,6 @@ onMounted(loadWorkout)
               <Trash2 :size="18" />
             </button>
           </div>
-
           <div class="p-4">
             <PreviousPerformance
                 :workout-id="workoutId"
@@ -1072,7 +915,6 @@ onMounted(loadWorkout)
                 :disabled="isFinished"
                 @reuse="(sets) => reusePreviousPerformance(exercise, sets)"
             />
-
             <div class="mb-3 grid grid-cols-[32px_1fr_1fr_1fr_36px] gap-2 text-center text-[11px] font-semibold uppercase text-slate-500">
               <span>N°</span>
               <span>Kg</span>
@@ -1080,7 +922,6 @@ onMounted(loadWorkout)
               <span>RPE</span>
               <span>OK</span>
             </div>
-
             <div
               v-for="(set, setIndex) in exercise.sets"
               :key="setIndex"
@@ -1088,8 +929,8 @@ onMounted(loadWorkout)
             >
               <span class="text-center text-sm font-semibold text-slate-400">
                 {{ setIndex + 1 }}
+                <span v-if="set.targetBlockPosition != null" class="mt-0.5 block text-[9px] font-normal text-lime-300" :title="`Bloc ${set.targetBlockPosition + 1}`">B{{ set.targetBlockPosition + 1 }}</span>
               </span>
-
               <input
                 v-model.number="set.weightKg"
                 type="number"
@@ -1100,7 +941,6 @@ onMounted(loadWorkout)
                 placeholder="—"
                 class="min-w-0 rounded-lg border border-white/10 bg-[#141D29] px-2 py-3 text-center text-sm text-white outline-none focus:border-lime-300 disabled:opacity-60"
               />
-
               <input
                 v-model.number="set.reps"
                 type="number"
@@ -1111,7 +951,6 @@ onMounted(loadWorkout)
                 placeholder="—"
                 class="min-w-0 rounded-lg border border-white/10 bg-[#141D29] px-2 py-3 text-center text-sm text-white outline-none focus:border-lime-300 disabled:opacity-60"
               />
-
               <input
                 v-model.number="set.rpe"
                 type="number"
@@ -1122,7 +961,6 @@ onMounted(loadWorkout)
                 placeholder="—"
                 class="min-w-0 rounded-lg border border-white/10 bg-[#141D29] px-2 py-3 text-center text-sm text-white outline-none focus:border-lime-300 disabled:opacity-60"
               />
-
               <button
                 type="button"
                 :disabled="isFinished"
@@ -1137,8 +975,11 @@ onMounted(loadWorkout)
               >
                 <Check v-if="set.completed" :size="18" />
               </button>
+              <div v-if="targetRepsLabel(set) || set.restSeconds != null" class="col-span-5 -mt-1 mb-1 flex flex-wrap items-center gap-x-3 gap-y-1 pl-10 text-[11px] text-slate-400">
+                <span v-if="targetRepsLabel(set)" class="text-lime-300">Objectif : {{ targetRepsLabel(set) }}</span>
+                <span v-if="set.restSeconds != null">Repos : {{ formatDuration(set.restSeconds) }}</span>
+              </div>
             </div>
-
             <div v-if="!isFinished" class="mt-3 flex items-center gap-2">
               <button
                 type="button"
@@ -1148,7 +989,6 @@ onMounted(loadWorkout)
                 <Plus :size="16" />
                 Ajouter une série
               </button>
-
               <button
                 v-if="exercise.sets.length"
                 type="button"
@@ -1162,7 +1002,6 @@ onMounted(loadWorkout)
           </div>
         </article>
       </section>
-
       <button
         v-if="!isFinished"
         type="button"
@@ -1172,7 +1011,6 @@ onMounted(loadWorkout)
         <Plus :size="19" />
         Ajouter un exercice
       </button>
-
       <div v-if="!isFinished" class="mt-8 grid grid-cols-2 gap-3">
         <button
           type="button"
@@ -1183,7 +1021,6 @@ onMounted(loadWorkout)
           <Save :size="18" />
           Enregistrer
         </button>
-
         <button
           type="button"
           :disabled="saving || finishing"
@@ -1199,7 +1036,6 @@ onMounted(loadWorkout)
           Terminer
         </button>
       </div>
-
       <button
         type="button"
         :disabled="deleting"
@@ -1210,7 +1046,6 @@ onMounted(loadWorkout)
         Supprimer cette séance
       </button>
     </template>
-
     <!-- Sélecteur d'exercices -->
     <div
       v-if="showExercisePicker"
@@ -1221,7 +1056,6 @@ onMounted(loadWorkout)
           <h2 class="text-lg font-bold text-white">
             Choisir un exercice
           </h2>
-
           <button
             type="button"
             class="rounded-lg p-2 text-slate-400 hover:text-white"
@@ -1231,14 +1065,12 @@ onMounted(loadWorkout)
             <X :size="20" />
           </button>
         </div>
-
         <input
           v-model="search"
           type="search"
           placeholder="Rechercher un exercice..."
           class="mb-4 w-full rounded-xl border border-white/10 bg-[#0B1018] px-4 py-3 text-sm text-white outline-none focus:border-lime-300"
         />
-
         <div class="space-y-2 overflow-y-auto">
           <div
             v-if="catalogLoading"
@@ -1246,7 +1078,6 @@ onMounted(loadWorkout)
           >
             Chargement...
           </div>
-
           <button
             v-for="exercise in filteredCatalog"
             :key="exercise.id"
@@ -1257,10 +1088,8 @@ onMounted(loadWorkout)
             <span class="text-sm font-medium text-white">
               {{ exercise.name }}
             </span>
-
             <Plus :size="18" class="text-lime-300" />
           </button>
-
           <p
             v-if="!catalogLoading && !filteredCatalog.length"
             class="py-8 text-center text-sm text-slate-400"

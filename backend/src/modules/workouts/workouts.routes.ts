@@ -217,6 +217,16 @@ workoutsRouter.patch(
     const result = await prisma.$transaction(async (tx) => {
       const existing = await tx.workout.findFirst({
         where: { id, userId },
+        include: {
+          exercises: {
+            orderBy: { position: "asc" },
+            include: {
+              sets: {
+                orderBy: { position: "asc" },
+              },
+            },
+          },
+        },
       });
 
       if (!existing) return null;
@@ -240,6 +250,67 @@ workoutsRouter.patch(
         }
 
 
+      const previousExercises = new Map(
+        existing.exercises.map((exercise) => [
+          exercise.exerciseId,
+          exercise,
+        ]),
+      );
+
+      const submittedIds = parsed.data.exercises.flatMap((exercise) =>
+        exercise.sets.flatMap((set) => set.id ? [set.id] : []),
+      );
+
+      if (new Set(submittedIds).size !== submittedIds.length) {
+        return "INVALID_SETS" as const;
+      }
+
+      const validSetIds = new Set(
+        existing.exercises.flatMap((exercise) =>
+          exercise.sets.map((set) => set.id),
+        ),
+      );
+
+      if (submittedIds.some((id) => !validSetIds.has(id))) {
+        return "INVALID_SETS" as const;
+      }
+
+      const preservedExercises = parsed.data.exercises.map(
+        (exercise, exerciseIndex) => {
+          const previousExercise = previousExercises.get(exercise.exerciseId);
+
+          const previousSets = new Map(
+            previousExercise?.sets.map((set) => [set.id, set]) ?? [],
+          );
+
+          return {
+            exerciseId: exercise.exerciseId,
+            position: exerciseIndex,
+            sets: {
+              create: exercise.sets.map((set, setIndex) => {
+                const previousSet = set.id
+                  ? previousSets.get(set.id)
+                  : undefined;
+
+                return {
+                  ...(previousSet ? { id: previousSet.id } : {}),
+                  position: setIndex,
+                  weightKg: set.weightKg,
+                  reps: set.reps,
+                  rpe: set.rpe ?? null,
+                  completed: set.completed,
+                  targetRepsMin: previousSet?.targetRepsMin ?? null,
+                  targetRepsMax: previousSet?.targetRepsMax ?? null,
+                  restSeconds: previousSet?.restSeconds ?? null,
+                  targetBlockPosition:
+                    previousSet?.targetBlockPosition ?? null,
+                };
+              }),
+            },
+          };
+        },
+      );
+
       await tx.workoutExercise.deleteMany({
         where: { workoutId: id },
       });
@@ -248,12 +319,21 @@ workoutsRouter.patch(
         where: { id },
         data: {
           name: parsed.data.name,
-          exercises: buildExercises(parsed.data.exercises),
+          exercises: {
+            create: preservedExercises,
+          },
         },
         include: workoutInclude,
       });
     });
 
+    if (result === "INVALID_SETS") {
+      res.status(400).json({
+        error: "Identifiants de séries invalides ou dupliqués.",
+      });
+      return;
+    }
+    
     if (result === null) {
       res.status(404).json({ error: "Séance introuvable" });
       return;

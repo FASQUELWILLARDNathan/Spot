@@ -96,15 +96,16 @@ model Exercise {
   createdById String?
   createdBy   User?       @relation(fields: [createdById], references: [id], onDelete: Cascade)
 
-  externalId       String? @unique
-  descriptionFr    String? @db.Text
+  externalId       String?  @unique
+  descriptionFr    String?  @db.Text
   instructionSteps String[] @default([])
   targetMuscle     String?
   secondaryMuscles String[] @default([])
   imageUrl         String?
   animationUrl     String?
 
-  workoutExercises WorkoutExercise[]
+  workoutExercises      WorkoutExercise[]
+  groupWorkoutExercises GroupWorkoutExercise[]
 
   createdAt DateTime @default(now())
 
@@ -126,6 +127,10 @@ model Workout {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  groupWorkoutId String?
+  groupWorkout   GroupWorkout? @relation(fields: [groupWorkoutId], references: [id], onDelete: SetNull)
+
+  @@index([groupWorkoutId])
   @@index([userId, startedAt])
 }
 
@@ -156,6 +161,14 @@ model WorkoutSet {
   rpe       Decimal? @db.Decimal(3, 1)
   completed Boolean  @default(false)
 
+  // Objectifs copiés depuis le programme commun.
+  targetRepsMin Int?
+  targetRepsMax Int?
+  restSeconds   Int?
+
+  // Permet de distinguer les différents blocs.
+  targetBlockPosition Int?
+
   createdAt DateTime @default(now())
 
   @@index([workoutExerciseId, position])
@@ -184,9 +197,10 @@ model Group {
   description String?
   ownerId     String
 
-  owner       User              @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  members     GroupMember[]
-  invitations GroupInvitation[]
+  owner         User              @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members       GroupMember[]
+  invitations   GroupInvitation[]
+  groupWorkouts GroupWorkout[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -225,6 +239,56 @@ model GroupInvitation {
 
   @@unique([groupId, receiverId])
   @@index([receiverId, status])
+}
+
+model GroupWorkout {
+  id      String @id @default(uuid())
+  groupId String
+  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String? @db.VarChar(300)
+
+  exercises GroupWorkoutExercise[]
+  workouts  Workout[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([groupId])
+}
+
+model GroupWorkoutExercise {
+  id             String @id @default(uuid())
+  groupWorkoutId String
+  exerciseId     String
+
+  groupWorkout GroupWorkout @relation(fields: [groupWorkoutId], references: [id], onDelete: Cascade)
+  exercise     Exercise     @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+
+  position      Int
+  targetSets    Int
+  targetRepsMin Int?
+  targetRepsMax Int?
+  restSeconds   Int?
+
+  setBlocks GroupWorkoutExerciseSetBlock[]
+
+  @@index([groupWorkoutId, position])
+}
+
+model GroupWorkoutExerciseSetBlock {
+  id                     String               @id @default(uuid())
+  groupWorkoutExerciseId String
+  groupWorkoutExercise   GroupWorkoutExercise @relation(fields: [groupWorkoutExerciseId], references: [id], onDelete: Cascade)
+
+  position      Int
+  targetSets    Int
+  targetRepsMin Int?
+  targetRepsMax Int?
+  restSeconds   Int?
+
+  @@index([groupWorkoutExerciseId, position])
 }
 
 enum MuscleGroup {

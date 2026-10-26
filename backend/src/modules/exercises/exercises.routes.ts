@@ -76,6 +76,19 @@ exercisesRouter.get("/:id", async (req, res, next) => {
         OR: [
           { createdById: null },
           { createdById: userId },
+          {
+            groupWorkoutExercises: {
+              some: {
+                groupWorkout: {
+                  group: {
+                    members: {
+                      some: { userId },
+                    },
+                  },
+                },
+              },
+            },
+          },
         ],
       },
     });
@@ -116,6 +129,19 @@ exercisesRouter.post("/", async (req, res, next) => {
         OR: [
           { createdById: null },
           { createdById: userId },
+          {
+            groupWorkoutExercises: {
+              some: {
+                groupWorkout: {
+                  group: {
+                    members: {
+                      some: { userId },
+                    },
+                  },
+                },
+              },
+            },
+          },
         ],
       },
     });

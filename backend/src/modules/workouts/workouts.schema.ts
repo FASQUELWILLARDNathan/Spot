@@ -6,6 +6,7 @@ const MAX_SETS_PER_EXERCISE = 20;
 const MAX_TOTAL_SETS = 300;
 
 const workoutSetSchema = z.object({
+  id: z.uuid().optional(),
   weightKg: z.number()
     .finite()
     .min(0)

@@ -16,6 +16,7 @@ import { groupsRouter } from "./modules/groups/groups.routes.js";
 import { groupStatsRouter } from "./modules/groups/groups.stats.routes.js";
 import { privacyRouter } from "./modules/profile/privacy.routes.js";
 import { groupLeaderboardRouter } from "./modules/groups/groups.leaderboard.routes.js";
+import { groupWorkoutsRouter } from "./modules/groups/group-workouts.routes.js";
 
 export const app = express();
 
@@ -86,6 +87,7 @@ app.use("/api/groups", groupsRouter);
 app.use("/api/groups", groupStatsRouter);
 app.use("/api/profile/privacy", privacyRouter);
 app.use("/api/groups", groupLeaderboardRouter);
+app.use("/api/groups", groupWorkoutsRouter);
 
 // Gestion centralisée des erreurs
 app.use((
